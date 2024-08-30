@@ -1,7 +1,7 @@
-#define ID_NODO ("22")
-#define PATH ("/CSVnodoHijo_22.txt")
-#define PATH2 ("/CopiaCSVnodoHijo_22.txt")
-#define DATA_TOTAL ("/dataTotal_hijo_22.txt")
+#define ID_NODO ("35")
+#define PATH ("/CSVnodoHijo_35.txt")
+#define PATH2 ("/CopiaCSVnodoHijo_35.txt")
+#define DATA_TOTAL ("/dataTotal_hijo_35.txt")
 
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -14,7 +14,7 @@
 // variables del sleep
 // #define TIME_OF_SAMPLING 3600000 //1 hora
 #define SAMPLING_TIME 3600000 // 900000//3600000 //240000 //2 minutos prueba
-#define CONECTION_TIME 180000   // tiempo en que se espera la conexion al nodo padre
+#define CONECTION_TIME 180000//5000//180000   // tiempo en que se espera la conexion al nodo padre
 #define mS_TO_uS_FACTOR 1000    // factor para pasar milis a micro segundos
 #define S_TO_mS_FACTOR 60000       // factor para pasar segundos a milisegundos segundos
 
@@ -46,20 +46,29 @@ unsigned long timerDelay = 0;
 #define LED 32
 boolean stateLed = true;
 
+#define PIN_CONTROL 25
+
 #include "usb_functions.h";
 #include "tinyRTC_functions.h";
 #include "mediciones.h";
 
 void setup()
 {
+  Serial.begin(115200);
+
   pinMode(LED,OUTPUT);
   digitalWrite(LED,stateLed);
 
-  Serial.begin(115200);
+  pinMode(PIN_CONTROL,OUTPUT);
+  digitalWrite(PIN_CONTROL,stateLed);
+
   while (!Serial)
   {
     Serial.print("."); // Espera hasta que el puerto serial se conecte
   }
+
+  Serial.print("Nodo: ");
+  Serial.println(ID_NODO);
 
   Wire.begin();
   setupRTC();
@@ -67,7 +76,6 @@ void setup()
   sendData();
   flag = true;
 
-  digitalWrite(LED,false);
   // modo deep sleep
   Serial.println("entrando a modo deep sleep");
   sleepEsp();

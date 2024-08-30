@@ -19,7 +19,6 @@ String readBME280Temperature()
 
 String readBME280Humidity()
 {
-
   float h = bme.readHumidity();
   if (isnan(h))
   {
@@ -82,9 +81,18 @@ String readBatery()
   return String(voltaje);
 }
 
+void initNpkSensor()
+{
+  Serial2.begin(4800, SERIAL_8N1, RXD2, TXD2);
+  pinMode(RE, OUTPUT);
+  digitalWrite(RE, HIGH);
+}
+
 String soilData()
 {
-  // Modbus request for reading all values
+  initNpkSensor();
+
+  //Peticion Modbus para leer todos los valores
   const byte allMeasure[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x07, 0x04, 0x08};
 
   // Recoleccion de valores
@@ -103,12 +111,6 @@ String soilData()
 
     Serial2.readBytes(values, sizeof(values));
 
-    Serial.println("sensor SOIL leido");
-    //    for(int i=0; i<sizeof(values);i++){
-    //      Serial.print(values[i],HEX);
-    //      Serial.print(" ");
-    //    }
-    // Serial.println();
     humidityInt = (values[3] << 8) | values[4];
     humidity = humidityInt / 10.0F;
 
@@ -192,8 +194,12 @@ unsigned long longToString(String timeEpoch)
 
 void sleepEsp()
 {
+  Serial.println("entrando a modo deep sleep");
+  unsigned long minuteToMicroSec = getMinute()*S_TO_mS_FACTOR;
+  timerDelay = SAMPLING_TIME - minuteToMicroSec;
+  digitalWrite(LED,false);
+  digitalWrite(PIN_CONTROL,false);
   WiFi.disconnect(true, true);
-  timerDelay = SAMPLING_TIME - (getMinute()*S_TO_mS_FACTOR);
   esp_sleep_enable_timer_wakeup(timerDelay* mS_TO_uS_FACTOR);
   esp_deep_sleep_start();
 }
@@ -247,6 +253,9 @@ boolean sendPost(String httpRequestData)
 
 String measurement(String timeNow)
 {
+  bme.begin(BME_ADDRESS);
+  SD.begin(5);
+
   char finalizador = '\n';
   Serial.println("Medicion inicida");
   String object_med = ID_NODO;
@@ -311,6 +320,12 @@ void sendData()
   }
 }
 
+void switchOffSD()
+{
+  SD.end();
+  SPI.end();
+}
+
 void setUp()
 {
   lastTime = millis();
@@ -345,43 +360,27 @@ void setUp()
   init.concat(separador);
   init.concat("nivel_bateria\n");
 
-  Serial.print("Nodo: ");
-  Serial.println(ID_NODO);
-
-  Serial2.begin(4800, SERIAL_8N1, RXD2, TXD2);
-  pinMode(RE, OUTPUT);
-  digitalWrite(RE, HIGH);
-
   boolean noBME = true;
   unsigned long LastTimeBME = millis();
   while (noBME)
   {
     if(!bme.begin(BME_ADDRESS))
     {
+      Serial.println("Modulo BME no conectado");
+      stateLed = !stateLed;
+      digitalWrite(LED,stateLed);
+
       if (((millis() - LastTimeBME) > CONECTION_SD_TIME))
       {
         noBME = false;
       }
-      Serial.println("Modulo BME no conectado");
-      digitalWrite(LED,stateLed);
       delay(300);
-      stateLed = !stateLed;
     }else
     {
       noBME = false;
+      Serial.println("BME conectado");
     }
 
-  }
-
-   // enable I2C port.
-  if (!bme.begin(BME_ADDRESS))
-  {
-    Serial.println("No hay un módulo BME conectado");
-    delay(2000);
-  }
-  else
-  {
-    Serial.println("BME conectado");
   }
 
   Serial.println("Inicializando SD card...");
@@ -390,13 +389,12 @@ void setUp()
   {
     if (((millis() - lastTimeUSB) > CONECTION_SD_TIME))
     {
-      digitalWrite(LED,false);
       sleepEsp();
     }
     Serial.println("Modulo SD no conectado");
     digitalWrite(LED,stateLed);
-    delay(2000);
     stateLed = !stateLed;
+    delay(2000);
   }
   stateLed = true;
   digitalWrite(LED,stateLed);
@@ -407,28 +405,34 @@ void setUp()
   Serial.println("Archivo verificado");
 
   WiFi.begin(ssid, password);
-  Serial.println("Connecting");
+  //measurement(getTimeRTC());
+
+  switchOffSD();
+
+  digitalWrite(PIN_CONTROL,false);
 
   while (WiFi.status() != WL_CONNECTED)
   {
+    Serial.println("Esperando Conexion");
+    WiFi.begin(ssid, password);
+    digitalWrite(LED,stateLed);
+    stateLed = !stateLed;
+
     if (((millis() - lastTime) > CONECTION_TIME))
     {
+      digitalWrite(PIN_CONTROL,true);
       String measurementString = measurement(getTimeRTC());
       appendFile(SD, PATH2, measurementString.c_str());
       appendFile(SD, DATA_TOTAL, measurementString.c_str());
-      digitalWrite(LED,false);
       sleepEsp();
     }
-    Serial.println("Connecting");
-    Serial.println(getTimeRTC());
-    WiFi.begin(ssid, password);
-    digitalWrite(LED,stateLed);
+
     delay(1000);
-    stateLed = !stateLed;
   }
   stateLed = true;
   digitalWrite(LED,stateLed);
+  digitalWrite(PIN_CONTROL,stateLed);
   Serial.println("");
-  Serial.print("Connected to WiFi network with IP Address: ");
+  Serial.print("Conectado a la dirección IP: ");
   Serial.println(WiFi.localIP());
 }

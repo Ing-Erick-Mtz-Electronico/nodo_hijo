@@ -102,4 +102,5 @@ void setupRTC()
       rtcESP.setTime(rtcOneCharge.unixtime());
     }
   }
+  Serial.println(getTimeRTC());
 }
